@@ -114,15 +114,23 @@ Login BO (With demo admin’s account) is part of common tests, and you could us
 
 ```js
 it('should login in BO', async function () {
-  await loginCommon.loginBO(this, page, user, password);
+  await loginCommon.loginBO(this, page);
 });
 ```
 
-Ps : Before using it, you should require the file.
+Note 1: Before using it, you should require the file.
 
 ```js
 // Require common test login
 const loginCommon = require('@commonTests/loginBO');
+```
+
+Note 2: You could use another user and password that the demo admin’s account.
+
+```js
+it('should login in BO', async function () {
+  await loginCommon.loginBO(this, page, 'yourLogin', 'yourPassword');
+});
 ```
 
 ## IV. Requiring needed pages
@@ -144,43 +152,58 @@ Note 2: If a page don’t exist yet, you need to create it (in the right folder)
 
 ## V. Filling the steps
 
-Two parts composed each step of the scenario : Actions and Expected Results
+Two parts composed each step of the scenario : actions and expected Results. There are functions written or will be written on your pages.
+Before adding them, you should check for existing ones and their parameters, or think about parameters for the new ones.
 
 ### Actions
 
-The actions is the part when the user do something on the browser : click on link, fill form ...
-
+The actions are the part when the user do something on the browser : click on link, fill a form ... 
 
 ```js
 it('should go to orders page', async function () {
   // Action
+  // Open Menu and go to orders page
   await dashboardPage.goToSubMenu(
-    page,
-    dashboardPage.ordersParentLink,
-    dashboardPage.ordersLink,
+    page, // Browser tab
+    dashboardPage.ordersParentLink, // Parent menu item : Sell -> orders
+    dashboardPage.ordersLink, // Child menu item : Sell -> orders -> orders
   );
 });
 
 it('should reset all filters', async function () {
   // Action
-  await ordersPage.resetAndGetNumberOfLines(page);
+  // Reset filter in orders list and get bumber of element
+  await ordersPage.resetAndGetNumberOfLines(
+    page, // Browser tab
+  );
 });
 
 it('should filter order by customer name', async function () {
   // Action
+  // Filter order by filling 'customer' input with 'DOE' (lastname of FO default account) 
   await ordersPage.filterOrders(
-    page,
-    'input',
-    'customer',
-    DefaultAccount.lastName,
+    page, // Browser tab
+    'input', // Filter type (input or select)
+    'customer', // Filter column
+    DefaultAccount.lastName, // Filter value 'DOE'
   );
 });
 
 it('should check customer link', async function () {
   // Action
-  // Click on customer link first row
-  await ordersPage.viewCustomer(page, 1);
+  // Click on customer link in first row
+  await ordersPage.viewCustomer(
+    page, // Browser tab
+    1, // First row in list
+  );
 });
+```
+
+Note: For filter orders, we used the FO default account which is part of demo data stored in *data* directory. For this scenario, we require customer file
+
+```js
+// Import customer 'J. DOE'
+const {DefaultAccount} = require('@data/demo/customer');
 ```
 
 ### Expected results
@@ -199,6 +222,7 @@ it('should go to orders page', async function () {
   );
 
   // Expected result
+  // Verify that the current page is orders by checking the title
   const pageTitle = await ordersPage.getPageTitle(page);
   await expect(pageTitle).to.contains(ordersPage.pageTitle);
 });
@@ -207,7 +231,8 @@ it('should reset all filters', async function () {
   // Action
   const numberOfOrders = await ordersPage.resetAndGetNumberOfLines(page);
 
-  // Expected result    
+  // Expected result
+  // Check that number of orders > 0 (that there's element in the list) 
   await expect(numberOfOrders).to.be.above(0);
 });
 
@@ -221,26 +246,62 @@ it('should filter order by customer name', async function () {
   );
 
   // Expected result
+  // Check that we have at least 1 order with customer J. DOE
   const numberOfOrders = await ordersPage.getNumberOfElementInGrid(page);
   await expect(numberOfOrders).to.be.at.least(1);
 });
 
 it('should check customer link', async function () {
   // Action
-  // Click on customer link first row
   page = await ordersPage.viewCustomer(page, 1);
 
   // Expected result
+  // Verify that the current page is view customer by checking the title 'View information about J. DOE'
   const pageTitle = await viweCustomerPage.getPageTitle(page);
   await expect(pageTitle).to
     .contains(`${viweCustomerPage.pageTitle} ${DefaultAccount.firstName[0]}. ${DefaultAccount.lastName}`);
 });
 ```
 
+Note: Before using expect, you should require it.
+
+```js
+// Import expect from chai
+const {expect} = require('chai');
+
+```
 ### Implementing missing function
 
-Assuming you use existing functions for almost all functions in actions and expected results, but it's still a chance that a new functions must be implemented.
-In this example, it's the *viewCustomer* function.
+For this scenario, we used mostly existing functions like *filterOrders*. You can check for existing functions in the *pages* directory. 
+
+```js
+  /**
+   * Filter Orders
+   * @param page
+   * @param filterType
+   * @param filterBy
+   * @param value
+   * @return {Promise<void>}
+   */
+  async filterOrders(page, filterType, filterBy, value = '') {
+    switch (filterType) {
+      case 'input':
+        await this.setValue(page, this.filterColumn(filterBy), value.toString());
+        break;
+
+      case 'select':
+        await this.selectByVisibleText(page, this.filterColumn(filterBy), value);
+        break;
+
+      default:
+      throw new Error(`${filterBy} was not found as a column filter.`);
+    }
+    // click on search
+    await this.clickAndWaitForNavigation(page, this.filterSearchButton);
+  }
+```
+
+But there is a chance that all functions are not already implemented. In this tutorial, it's the case of *viewCustomer* function.
  
 ```js
 /**
@@ -271,7 +332,7 @@ TEST_PATH="functional/BO/02_orders/01_orders/08_viewCustomer" URL_FO=shopUrl/ np
     ✓ should reset all filters
     ✓ should filter order by customer name
     ✓ should check customer link
-  5 passing (19s)
+ 5 passing (19s)
 
 ```
 
@@ -287,9 +348,10 @@ After adding it, Each step should look like this example :
 it('should check customer link', async function () {
   await testContext.addContextItem(this, 'testIdentifier', 'viewCustomer', baseContext);
 
-  // Click on customer link first row
+  // Click on customer link in first row
   page = await ordersPage.viewCustomer(page, 1);
 
+  // Verify that the current page is view customer by checking the title
   const pageTitle = await viweCustomerPage.getPageTitle(page);
   await expect(pageTitle).to
     .contains(`${viweCustomerPage.pageTitle} ${DefaultAccount.firstName[0]}. ${DefaultAccount.lastName}`);
@@ -311,6 +373,6 @@ npm run lint
 
 ## IX. Creating your pull request
 
-Now, that your test is ready and want to add it to PrestaShop tests campaigns, you can create a pull request by following [contribution guidelines](https://github.com/PrestaShop/PrestaShop#contributing).
+Now, that your test is ready, and you want to add it to PrestaShop tests campaigns, you can create a pull request by following the [contribution guidelines](https://github.com/PrestaShop/PrestaShop#contributing).
 
 Link to the Pr for this example : [#20280](https://github.com/PrestaShop/PrestaShop/pull/20280).
